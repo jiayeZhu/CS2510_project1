@@ -4,7 +4,6 @@ import json
 fileHashToPeerList = {}
 peerToFileHashes = {}
 
-
 async def regHandler(peer, data, writer):
     global fileHashToPeerList
     global peerToFileHashes
@@ -96,6 +95,16 @@ async def searchHandler(data, writer):
     return
 
 
+async def listAllHandler(writer):
+    global fileHashToPeerList
+    global peerToFileHashes
+    fileList = list(fileHashToPeerList.keys())
+    writer.write(json.dumps({"result":fileList}).encode())
+    await writer.drain()
+    writer.close()
+    return
+
+
 async def tcp_handler(reader, writer):
     data = await reader.read()  # read socket data
     addr = writer.get_extra_info('peername')  # get peer's ip
@@ -114,6 +123,9 @@ async def tcp_handler(reader, writer):
         return
     if cmd == "update":
         await updateRegHandler(peer, data, writer)
+        return
+    if cmd == "ls":
+        await listAllHandler(writer)
         return
 
 
