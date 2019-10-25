@@ -133,12 +133,12 @@ async def printCache():
     global fileHashToPeerList
     global peerToFileHashes
     while True:
-        print('=' * 10)
-        print('File index:')
-        print(fileHashToPeerList)
-        print('-' * 10)
-        print('peer index:')
-        print(peerToFileHashes)
+        # print('=' * 10)
+        # print('File index:')
+        # print(fileHashToPeerList)
+        # print('-' * 10)
+        # print('peer index:')
+        # print(peerToFileHashes)
         await asyncio.sleep(5)
 
 

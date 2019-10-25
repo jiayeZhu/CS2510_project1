@@ -108,3 +108,5 @@ venv.bak/
 
 #sharing dirs
 sharing*/
+smallSharing*/
+utils/*.mp4

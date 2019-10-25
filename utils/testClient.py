@@ -1,7 +1,11 @@
 import asyncio
 import json
 
-picdata = [b'',b'']
+picdata = []
+tasks=[]
+total = 10
+for i in range(total):
+    picdata.append(b'')
 async def tcp_echo_client(loop,chunk,total):
     global picdata
     reader, writer = await asyncio.open_connection('127.0.0.1', 8888,
@@ -10,7 +14,7 @@ async def tcp_echo_client(loop,chunk,total):
     # print('Send: %r' % message)
     # writer.write(message.encode())
     print('connected')
-    writer.write(json.dumps({'chunk':chunk,'total':total}).encode())
+    writer.write(json.dumps({'chunk':chunk,'total':total,'filename':'testmov.mp4'}).encode())
     writer.write_eof()
     await writer.drain()
     print('client written')
@@ -34,16 +38,18 @@ async def tcp_echo_client(loop,chunk,total):
 loop = asyncio.get_event_loop()
 # f = open('testpic.jpg','rb')
 # message = f.read()
-tasks=[]
-total = 2
+
 for i in range(total):
     tasks.append(tcp_echo_client(loop,i,total))
 
 loop.run_until_complete(asyncio.wait(tasks))
 loop.close()
 
-pic = picdata[0]+picdata[1]
+pic = b''
+for i in range(total):
+    pic += picdata[i]
 # print(pic)
-f = open('lalala.jpg','wb')
+print(len(pic))
+f = open('test.mp4','wb')
 f.write(pic)
 f.close()
