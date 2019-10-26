@@ -141,7 +141,7 @@ async def tcp_handler(reader, writer):
 
     requestRcvCounter += 1  #count new request
     data = await reader.read()  # read socket data
-    requestRcvCounter += len(data)  #count bytes received
+    bytesRcvCounter += len(data)  #count bytes received
     addr = writer.get_extra_info('peername')  # get peer's ip
     print("Received data from ", addr)  # log request
     data = json.loads(data)  # parse the request to object
