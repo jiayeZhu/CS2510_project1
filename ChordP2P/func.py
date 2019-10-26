@@ -1,9 +1,13 @@
 from threading import Thread
-from address import Address
+from address  import Address
 import socket
 import time
 
 default_sleep_time = 1
+
+def between(hash1, hash2, hash3):
+    if(hash2 < hash1) and (hash1 < hash3):
+        return True
 
 class Func(Thread):
     def __init__(self, peer, state):
@@ -20,9 +24,7 @@ class Func(Thread):
         while True:
             print (self.conn)
             if self.state.in_ring:
-                self.check_predecessor()
                 self.stabilize()
-                #
             time.sleep(default_sleep_time)
 
     def ping(self):
@@ -30,10 +32,10 @@ class Func(Thread):
         return 'Running on {}:{}'.format(self.state.ip, self.state.port)
 
     def create_ring(self):
-        # self.state.successor = self.state.local_address                  #
-        # self.state.predecessor = self.state.local_address
+        # self.state.successor = self.state.address                  #
+        # self.state.predecessor = self.state.address
         self.state.finger[0] = self.state.id
-        self.state.addr_dict[str(self.state.id)] = self.state.local_address
+        self.state.addr_dict[str(self.state.id)] = self.state.address
         self.state.in_ring = True
         return "New ring created"
 
@@ -48,12 +50,13 @@ class Func(Thread):
     def join(self, ip, port):
         print('joining {}:{}'.format(ip, port))
         try:
-            s = self.send(Address(ip, port), 'find_successor {}'.format(self.state.id))   #
+            # new node requests the wizard(ip, port) to find its successor
+            s = self.send(Address(ip, port), 'find_successor {}'.format(self.state.id))   
             data = s.recv(1024).decode('utf-8')
             successor_ip, successor_port = data.split(':')   
             s.close()   
             self.state.lock.acquire()
-            self.state.addr_dict[str(self.state.id)] = self.state.local_address
+            self.state.addr_dict[str(self.state.id)] = self.state.address
             self.state.successor = Address(successor_ip, successor_port)
             self.state.finger[0] = self.state.successor.hash
             self.state.addr_dict[str(self.state.finger[0])] = self.state.successor
@@ -64,15 +67,70 @@ class Func(Thread):
         except:
             return "Error while joining the chord"
 
+    def  find_successor(self, id):
+        # if id should be the first node
+            #todo
+        # if id should be the last node
+            #todo
+        #else
+        if(between(id, self.state.id, self.state.successor.id)):
+            return '{}:{}'.format(self.state.successor.address.ip, self.state.successor.address.port)
+        else:
+            for i in len(self.state.finger):
+                if(between(id, self.state.finger[i]), self.state.finger[i + 1]):
+                    next_ip = self.state.addr_dict[str(self.state.finger[i])].ip
+                    next_port = self.state.addr_dict[str(self.state.finger[i])].port
+                    break
+            s = self.send(Address(next_ip, next_port), 'find_successor {}'.format(id))
+            return s.recv(1024).decode('utf-8')
+
     def stabilize(self):
         try:
-            s = self.send(self.state.successor, 'get_predecessor')
+            #check the predecessor of its successor
+            s = self.send(self.state.successor, 'check_pre_of_suc')
             res = s.recv(1024).decode('utf-8')
             s.close()
             if res != 'None':
-                #the predecessor of its successor
-                suc_pre_ip, suc_pre_port = res.split(':')
-                suc_pre = Address(suc_pre_ip, suc_pre_port)
-             #todo
+                pre_of_suc_ip, pre_of_suc_port = res.split(':')
+                #the predecessor of its successor has changed
+                if(pre_of_suc_ip != self.state.ip) and (pre_of_suc_port != self.state.port):
+                    self.state.successor = Address(pre_of_suc_ip, pre_of_suc_port)
+                    s = self.send(self.state.successor, 'notify {}:{}'.format(self.state.successor.ip, self.state.successor.port))
+        except:
+            print("Failed to check the predecessor of its successor")
 
-    
+    def check_pre_of_suc(self):
+        #check the predecessor of its successor
+        if (self.state.predecessor != None):
+            try:
+                s = self.send(self.state.predecessor, 'ping')
+                response = s.recv(1024)
+                print(response)
+                if (response[:7] == b'Running'):
+                    ss = self.send(self.state.predecessor, 'get_successor')
+                    res = ss.recv(1024).decode('utf-8')
+                    if (res != 'None'):
+                        pre_of_suc_ip, pre_of_suc_port = res.split(':')
+                        return '{}:{}'.format(pre_of_suc_ip, pre_of_suc_port)
+                else:
+                    self.state.lock.acquire()
+                    self.state.predecessor = None
+                    self.state.lock.release()
+                    print("Failed to get response from predecessor")
+            except:
+                print('unexpected response while ping predecessor : ' , response)
+                self.state.lock.acquire()
+                del self.state.addr_dict[str(self.state.predecessor.hash)]
+                self.state.predecessor = None
+                self.state.lock.release()
+                print("Failed to get response from predecessor")
+
+    def get_successor(self):
+        return '{}:{}'.format(self.state.successor.ip, self.state.successor.port)
+
+    def notify(self, ip, port):
+        #get notified, modify its predecessor to (ip, port)
+        new_pre = Address(ip, port)
+        self.state.lock.acquire()  
+        self.state.predecessor = new_pre
+        self.state.lock.release() 

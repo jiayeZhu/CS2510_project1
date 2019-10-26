@@ -14,12 +14,12 @@ class Node:
         self.in_ring = False
         self.ip = socket.gethostbyname(socket.gethostname())
         self.port = port
-        self.local_address = Address(self.ip, self.port)
-        self.id = self.local_address.hash
+        self.address = Address(self.ip, self.port)
+        self.id = self.address.hash
         # self.id = abs(hash(('{}:{}'.format(self.ip, int(port))).encode())) % 2 ** M
         self.predecessor = None
         self.successor = None
-        self.finger = [None] * M  # contains finger nodes' Chord ids
+        self.finger = {}  # contains finger nodes' Chord ids
         self.addr_dict = {}  # key: a Chord id; value: corresponding Address (IP/port) 
         self.i = 1
         self.lock = Lock()
