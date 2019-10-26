@@ -17,16 +17,27 @@ fileHashToFile = {}
 fileList = []
 N = 0
 f = 0
+stopAfter = -1
 
+# requestRcvFromServerCounter = 0
+requestSndToServerCounter = 0
+requestRcvFromPeersCounter = 0
+requestSndToPeersCounter = 0
+bytesRcvFromServerCounter = 0
+bytesSndToServerCounter = 0
+bytesRcvFromPeersCounter = 0
+bytesSndToPeersCounter = 0
 
 def print_help():
     print("python3 client.py [options]\n"
+          "\t-h show this help\n"
           "\t-p <local port>\n"
           "\t-s <index server address>\n"
           "\t-i <dir of files you want to share>\n"
           "\t-o <dir for downloading files from others>\n"
           "\t-N <Number of sequential requests>\n"
-          "\t-f <request interval in seconds>\n")
+          "\t-f <request interval in seconds>\n"
+          "\t-T <stop after T seconds>(default=-1 means forever)")
     return
 
 
@@ -64,11 +75,15 @@ async def fileReader(filename,myChunkNumber,totalChunkNumber):
 
 
 async def tcp_client(message, loop):
+    global bytesSndToServerCounter
+    global bytesRcvFromServerCounter
     reader, writer = await asyncio.open_connection('127.0.0.1', 8888, loop=loop)
     writer.write(message.encode())
+    bytesSndToServerCounter += len(message.encode())
     await writer.drain()
     writer.write_eof()
     data = await reader.read()
+    bytesRcvFromServerCounter += len(data)
     writer.close()
     # print('Received: %r' % data.decode())
     return data
@@ -77,13 +92,20 @@ async def tcp_client(message, loop):
 async def RequestForFile(filedata,filehash,targetAddress,loop,chunk,total):
     # print("REQUESTFORFILE__HASH:",filehash)
     # print(filedata)
+    global requestSndToPeersCounter
+    global bytesSndToPeersCounter
+    global bytesRcvFromPeersCounter
     reader, writer = await asyncio.open_connection(targetAddress.split(':')[0], int(targetAddress.split(':')[1]),
                                                    loop=loop)
     print('connected to:',targetAddress)
-    writer.write(json.dumps({'cmd':'get','chunk':chunk,'total':total,'hash':filehash}).encode())
+    req = json.dumps({'cmd':'get','chunk':chunk,'total':total,'hash':filehash}).encode()
+    writer.write(req)
     writer.write_eof()
+    requestSndToPeersCounter += 1
+    bytesSndToPeersCounter += len(req)
     await writer.drain()
     data =  await reader.read()
+    bytesRcvFromPeersCounter += len(data)
 
     # print('chunk number:',chunk,' received data lens:',len(data))
 
@@ -126,6 +148,7 @@ async def requestRemoteFileList(loop):
 async def fileTransferHandler(data,writer):
     global fileHashToFile
     global sharingDir
+    global bytesSndToPeersCounter
 
     fileName = fileHashToFile[data['hash']]
     fileName = os.path.join(sharingDir,fileName)
@@ -137,9 +160,7 @@ async def fileTransferHandler(data,writer):
     writer.write_eof()
     await writer.drain()
     writer.close()
-    # writer.write(json.dumps({"result":fileList}).encode())
-    # await writer.drain()
-    # writer.close()
+    bytesSndToPeersCounter += len(chunk)
     return
 
 async def fileWriter(path,data):
@@ -151,16 +172,32 @@ async def fileWriter(path,data):
 
 # file sharing service handler
 async def sharingHandler(reader, writer):
+    global requestRcvFromPeersCounter
+    global bytesRcvFromPeersCounter
     data = await reader.read()  # read socket data
+    requestRcvFromPeersCounter += 1
+    bytesRcvFromPeersCounter += len(data)
     addr = writer.get_extra_info('peername')  # get peer's ip
     print("Received request from ", addr)  # log request
     data = json.loads(data)  # parse the request to object
     cmd = data['cmd']  # get commond part
-    # peer = addr[0] + ':' + str(data['port'])  # create peer address
     if cmd == "get":
         await fileTransferHandler(data, writer)
         return
-    
+
+async def shutdownManager():
+    global stopAfter
+    if stopAfter == -1:
+        return
+    else:
+        loop = asyncio.get_event_loop()
+        start_time = loop.time()
+        while True:
+            timePassed = loop.time() - start_time
+            print(timePassed)
+            if timePassed >= stopAfter:
+                loop.stop()
+            await asyncio.sleep(2) 
 
 async def main():
     global port
@@ -171,6 +208,7 @@ async def main():
     global fileList
     global N
     global f
+    global requestSndToServerCounter
     
     #setup fileListCache
     fileList = scanFiles(sharingDir)  #get the list of files for sharing
@@ -182,10 +220,11 @@ async def main():
     # print(list(fileHashToFile.keys()))
     loop = asyncio.get_event_loop()
     connected = await regist(loop)
+    requestSndToServerCounter += 1
     if not connected:
-        # print('FAILED TO REGIST AT THE SERVER! STOPED')
-        # sys.exit()
-        print('!!! ALREADY REGISTERED !!!')
+        print('FAILED TO REGIST AT THE SERVER! STOPED')
+        sys.exit()
+        # print('!!! ALREADY REGISTERED !!!')
 
     else:
         print('=== peer registed successfully. ===')
@@ -193,6 +232,7 @@ async def main():
     #start intervally request for files
     while True:
         remoteFileList = await requestRemoteFileList(loop)
+        requestSndToServerCounter += 1
         remoteFileList = remoteFileList['result']
         # print(remoteFileList)
         filesToFetch = []
@@ -202,6 +242,7 @@ async def main():
             filesToFetch.append(remoteFileList[idx])
         # print(filesToFetch)
         peerListsToRequest = await searchFiles(filesToFetch)
+        requestSndToServerCounter += 1
         peerListsToRequest = peerListsToRequest['result']
 
         tasks = []
@@ -218,6 +259,7 @@ async def main():
             for j in range(len(peerList)):
                 peer = peerList[j]
                 tasks.append(RequestForFile(files[i],fileHash,peer,loop,j,len(peerList)))
+                requestSndToServerCounter += 1
         all_task = asyncio.wait(tasks)
         await loop.create_task(all_task)
         writerWorkers = []
@@ -236,7 +278,7 @@ async def main():
 if __name__ == "__main__":
     #options parser
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hs:p:i:o:N:f:')
+        opts, args = getopt.getopt(sys.argv[1:], 'hs:p:i:o:N:f:T:')
         # print(opts)
     except getopt.GetoptError:
         print_help()
@@ -258,6 +300,8 @@ if __name__ == "__main__":
             N = int(arg)
         elif opt == '-f':
             f = float(arg)
+        elif opt == '-T':
+            stopAfter = int(arg)
     if sharingDir=='' or downloadingDir=='' or serverAddr=='' or port  * N * f * serverPort == 0:
         print_help()
         sys.exit()
@@ -267,11 +311,25 @@ if __name__ == "__main__":
     server = loop.run_until_complete(coro)
     print('Start sharing at {}'.format(server.sockets[0].getsockname()))
     loop.create_task(main())
+    loop.create_task(shutdownManager())
     try:
         loop.run_forever()
     except KeyboardInterrupt:
+        print('client out')
         pass
-
+    statName = hashlib.md5()
+    statName.update(str(random.random()))
+    statName = statName.hexdigest()
+    statFileName = 'client_'+statName+'.stat'
+    f = open(statFileName)
+    f.write('Request sent to server:\t'+str(requestSndToServerCounter)+'\n')
+    f.write('Request received from server:\t'+str(requestRcvFromPeersCounter)+'\n')
+    f.write('Request sent to peers:\t'+str(requestSndToPeersCounter)+'\n')
+    f.write('Bytes received from server:\t'+str(bytesRcvFromServerCounter)+'\n')
+    f.write('Bytes sent to server:\t'+str(bytesSndToServerCounter)+'\n')
+    f.write('Bytes received from peers:\t'+str(bytesRcvFromPeersCounter)+'\n')
+    f.write('Bytes sent to peers:\t'+str(bytesSndToPeersCounter)+'\n')
+    f.close()
     # Close the server
     server.close()
     loop.run_until_complete(server.wait_closed())

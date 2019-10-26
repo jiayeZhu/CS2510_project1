@@ -1,16 +1,32 @@
 import asyncio
 import json
+import getopt
+import sys
 
 fileHashToPeerList = {}
 peerToFileHashes = {}
+stopAfter = -1
+
+requestRcvCounter = 0
+bytesRcvCounter = 0
+bytesSndCounter = 0
+
+def print_help():
+    print("python3 server.py [options]\n"
+          "\t-h show this help\n"
+          "\t-T <stop after T seconds>(default=-1 means forever)")
+    return
+
 
 async def regHandler(peer, data, writer):
     global fileHashToPeerList
     global peerToFileHashes
+    global bytesSndCounter
     if peer in peerToFileHashes:  # if peer already registered
         writer.write(b'\x00')  # reject using \x00
         await writer.drain()
         writer.close()
+        bytesSndCounter += 1
         return
 
     files = data['files']  # get peer's filehash list
@@ -23,16 +39,19 @@ async def regHandler(peer, data, writer):
     writer.write(b'\x01')  # response success using \x01
     await writer.drain()
     writer.close()
+    bytesSndCounter += 1
     return
 
 
 async def updateRegHandler(peer, data, writer):
     global fileHashToPeerList
     global peerToFileHashes
+    global bytesSndCounter
     if peer not in peerToFileHashes:  # if peer is not registered
         writer.write(b'\x00')  # reject
         await writer.drain()
         writer.close()
+        bytesSndCounter += 1
         return
 
     diffs = data['diffs']  # get the difference
@@ -49,6 +68,7 @@ async def updateRegHandler(peer, data, writer):
             writer.write(b'\x00')  # reject
             await writer.drain()
             writer.close()
+            bytesSndCounter += 1
             return
         else:  # else
             fileHashToPeerList[f].remove(peer)  # remove the peer from the peerlist of the file
@@ -56,16 +76,19 @@ async def updateRegHandler(peer, data, writer):
     writer.write(b'\x01')  # response success using \x01
     await writer.drain()
     writer.close()
+    bytesSndCounter += 1
     return
 
 
 async def unregHandler(peer, writer):
     global fileHashToPeerList
     global peerToFileHashes
+    global bytesSndCounter
     if peer not in peerToFileHashes:  # if peer hasn't registered
         writer.write(b'\x00')  # reject
         await writer.drain()
         writer.close()
+        bytesSndCounter += 1
         return
     files = peerToFileHashes[peer]  # find the files store at the peer
     for f in files:
@@ -76,12 +99,14 @@ async def unregHandler(peer, writer):
     writer.write(b'\x01')  # response success
     await writer.drain()
     writer.close()
+    bytesSndCounter += 1
     return
 
 
 async def searchHandler(data, writer):
     global fileHashToPeerList
     global peerToFileHashes
+    global bytesSndCounter
     files = data['files']  # get the search list
     result = []  # construct the result list
     for f in files:  # for each file in the search list
@@ -89,24 +114,34 @@ async def searchHandler(data, writer):
             result.append(fileHashToPeerList[f])  # push available peers list to the result list if found
         else:
             result.append([])  # push empty list to the result list if not found
-    writer.write(json.dumps({"result": result}).encode())  # send the result
+    response = json.dumps({"result": result}).encode()
+    writer.write(response)  # send the result
     await writer.drain()
     writer.close()
+    bytesSndCounter += len(response)
     return
 
 
 async def listAllHandler(writer):
     global fileHashToPeerList
     global peerToFileHashes
+    global bytesSndCounter
     fileList = list(fileHashToPeerList.keys())
-    writer.write(json.dumps({"result":fileList}).encode())
+    response = json.dumps({"result":fileList}).encode()
+    writer.write(response)
     await writer.drain()
     writer.close()
+    bytesSndCounter += len(response)
     return
 
 
 async def tcp_handler(reader, writer):
+    global requestRcvCounter
+    global bytesRcvCounter
+
+    requestRcvCounter += 1  #count new request
     data = await reader.read()  # read socket data
+    requestRcvCounter += len(data)  #count bytes received
     addr = writer.get_extra_info('peername')  # get peer's ip
     print("Received data from ", addr)  # log request
     data = json.loads(data)  # parse the request to object
@@ -142,10 +177,40 @@ async def printCache():
         await asyncio.sleep(5)
 
 
+async def shutdownManager():
+    global stopAfter
+    if stopAfter == -1:
+        return
+    else:
+        loop = asyncio.get_event_loop()
+        start_time = loop.time()
+        while True:
+            timePassed = loop.time() - start_time
+            print(timePassed)
+            if timePassed >= stopAfter:
+                loop.stop()
+            await asyncio.sleep(2)
+
+
+#options parser
+try:
+    opts, args = getopt.getopt(sys.argv[1:], 'hT:')
+    # print(opts)
+except getopt.GetoptError:
+    print_help()
+    sys.exit(2)
+for (opt, arg) in opts:
+    if opt == '-h':
+        print_help()
+    elif opt == '-T':
+        stopAfter = int(arg)
+
+
 loop = asyncio.get_event_loop()
 coro = asyncio.start_server(tcp_handler, '127.0.0.1', 8888, loop=loop)
 server = loop.run_until_complete(coro)
 loop.create_task(printCache())
+loop.create_task(shutdownManager())
 # Serve requests until Ctrl+C is pressed
 print('Serving on {}'.format(server.sockets[0].getsockname()))
 try:
@@ -153,6 +218,11 @@ try:
 except KeyboardInterrupt:
     pass
 
+f = open('server.stat')
+f.write('Request received:\t'+str(requestRcvCounter)+'\n')
+f.write('Bytes Received:\t'+str(bytesRcvCounter)+'\n')
+f.write('bytes Send:\t'+str(bytesSndCounter)+'\n')
+f.close()
 # Close the server
 server.close()
 loop.run_until_complete(server.wait_closed())
