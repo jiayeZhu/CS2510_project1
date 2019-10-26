@@ -8,17 +8,14 @@ M = 0
 MIN = 1
 MAX = 4096
 n=0
-N=0
-f=0
+
 
 def print_help():
     print("python3 experimentSetup.py\n"
           "\t-M <number of files you want to generate for each peer>\n"
           "\t-n <number of peers you want to setup>\n"
           "\t--min=<min size in bytes>(default=1)\n"
-          "\t--max=<max size>(default=4096)\n"
-          "\t-N <Number of sequential requests>\n"
-          "\t-f <request interval in seconds>\n")
+          "\t--max=<max size>(default=4096)\n")
     return
 
 def genFiles(_dir_,M=0, MIN=0, MAX=1024):
@@ -47,17 +44,13 @@ for (opt, arg) in opts:
         MIN = int(arg)
     elif opt == '--max':
         MAX = int(arg)
-    elif opt == '-N':
-        N = int(arg)
-    elif opt == '-f':
-        f = float(arg)
 if M * n == 0 :
     print_help()
     sys.exit()
 
 
 
-os.system('python3 ./CentralizedVersion/server.py > server.log &')
+# os.system('python3 ./CentralizedVersion/server.py > server.log &')
 
 baseSharingDirName = 'sharing'
 baseDownloadingDirName = 'downloads'
@@ -68,7 +61,7 @@ for i in range(n):
     os.mkdir(sharingDir)
     os.mkdir(downloadingDir)
     genFiles(sharingDir,M,MIN,MAX)
-    os.system('python3 ./CentralizedVersion/client.py -p '+str(startPort+i)+' -s 127.0.0.1:8888 -i '+sharingDir+' -o '+downloadingDir+' -N '+str(N)+' -f'+str(f)+' > client_'+str(i)+'.log &')
+    # os.system('python3 ./CentralizedVersion/client.py -p '+str(startPort+i)+' -s 127.0.0.1:8888 -i '+sharingDir+' -o '+downloadingDir+' -N '+str(N)+' -f'+str(f)+' > client_'+str(i)+'.log &')
 
 
 
