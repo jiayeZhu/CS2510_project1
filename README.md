@@ -1,6 +1,11 @@
 # CS2510_project1
 p2p file sharing system
 
+# requirement
+python version >= 3.6
+
+pip install aiomultiprocess
+
 # how to use
 ```
 python3 utils/experimentSetup.py

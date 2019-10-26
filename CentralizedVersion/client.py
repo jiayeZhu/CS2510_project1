@@ -108,9 +108,10 @@ async def RequestForFile(filedata,filehash,targetAddress,loop,chunk,total):
     bytesSndToPeersCounter += len(req)
     await writer.drain()
     t_start = loop.time()
-    data =  await reader.read()
+    first_chunk = await reader.read(1) #read the \x01 byte fro calculating the response time
     t_stop = loop.time()
     peersResponseTime += (t_stop - t_start)
+    data =  await reader.read()
     bytesRcvFromPeersCounter += len(data)
 
     # print('chunk number:',chunk,' received data lens:',len(data))
@@ -162,6 +163,7 @@ async def fileTransferHandler(data,writer):
     totalChunkNumber = data['total']
     p = Worker(target=fileReader, args=(fileName, myChunkNumber,totalChunkNumber))
     chunk = await p
+    writer.write(b'\x01')    #add one byte at head for calculating response time
     writer.write(chunk)
     writer.write_eof()
     await writer.drain()
