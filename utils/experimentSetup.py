@@ -32,7 +32,7 @@ def genFiles(_dir_,M=0, MIN=0, MAX=1024):
             fout.close()
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'hM:n:', ['min=', 'max='])
+    opts, args = getopt.getopt(sys.argv[1:], 'hM:n:N:f:', ['min=', 'max='])
 except getopt.GetoptError:
     print_help()
 for (opt, arg) in opts:
