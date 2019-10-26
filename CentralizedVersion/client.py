@@ -27,6 +27,8 @@ bytesRcvFromServerCounter = 0
 bytesSndToServerCounter = 0
 bytesRcvFromPeersCounter = 0
 bytesSndToPeersCounter = 0
+serverResponseTime = 0
+peersResponseTime = 0
 
 def print_help():
     print("python3 client.py [options]\n"
@@ -95,6 +97,7 @@ async def RequestForFile(filedata,filehash,targetAddress,loop,chunk,total):
     global requestSndToPeersCounter
     global bytesSndToPeersCounter
     global bytesRcvFromPeersCounter
+    global peersResponseTime
     reader, writer = await asyncio.open_connection(targetAddress.split(':')[0], int(targetAddress.split(':')[1]),
                                                    loop=loop)
     print('connected to:',targetAddress)
@@ -104,7 +107,10 @@ async def RequestForFile(filedata,filehash,targetAddress,loop,chunk,total):
     requestSndToPeersCounter += 1
     bytesSndToPeersCounter += len(req)
     await writer.drain()
+    t_start = loop.time()
     data =  await reader.read()
+    t_stop = loop.time()
+    peersResponseTime += (t_stop - t_start)
     bytesRcvFromPeersCounter += len(data)
 
     # print('chunk number:',chunk,' received data lens:',len(data))
@@ -209,7 +215,8 @@ async def main():
     global N
     global f
     global requestSndToServerCounter
-    
+    global serverResponseTime
+
     #setup fileListCache
     fileList = scanFiles(sharingDir)  #get the list of files for sharing
     for filename in fileList:
@@ -219,7 +226,10 @@ async def main():
         fileHashToFile[hash] = filename  #create hash mapping to filenames
     # print(list(fileHashToFile.keys()))
     loop = asyncio.get_event_loop()
+    t_start = loop.time()
     connected = await regist(loop)
+    t_stop = loop.time()
+    serverResponseTime += (t_stop - t_start)
     requestSndToServerCounter += 1
     if not connected:
         print('FAILED TO REGIST AT THE SERVER! STOPED')
@@ -231,7 +241,11 @@ async def main():
 
     #start intervally request for files
     while True:
+        t_loopstart = loop.time()
+        t_start = loop.time()
         remoteFileList = await requestRemoteFileList(loop)
+        t_stop = loop.time()
+        serverResponseTime += (t_stop - t_start)
         requestSndToServerCounter += 1
         remoteFileList = remoteFileList['result']
         # print(remoteFileList)
@@ -241,7 +255,10 @@ async def main():
             idx = random.randint(0,RFL_length-1)
             filesToFetch.append(remoteFileList[idx])
         # print(filesToFetch)
+        t_start = loop.time()
         peerListsToRequest = await searchFiles(filesToFetch)
+        t_stop = loop.time()
+        serverResponseTime += (t_stop - t_start)
         requestSndToServerCounter += 1
         peerListsToRequest = peerListsToRequest['result']
 
@@ -272,7 +289,8 @@ async def main():
             writerWorkers.append(Worker(target=fileWriter, args=(os.path.join(downloadingDir,filesToFetch[i]), files[i])))
         await loop.create_task(asyncio.wait(writerWorkers))
         print('written')
-        await asyncio.sleep(f)
+        if f - (loop.time()-t_loopstart) > 0:
+            await asyncio.sleep(f - (loop.time()-t_loopstart))
     
 
 if __name__ == "__main__":
@@ -323,13 +341,15 @@ if __name__ == "__main__":
     statFileName = 'client_'+statName+'.stat'
     f = open(statFileName,'w')
     f.write('========== Client statistical result ==========\n')
-    f.write('Request sent to server:\t'+str(requestSndToServerCounter)+'\n')
+    f.write('Request sent to server:\t\t'+str(requestSndToServerCounter)+'\n')
     f.write('Request received from server:\t'+str(requestRcvFromPeersCounter)+'\n')
-    f.write('Request sent to peers:\t'+str(requestSndToPeersCounter)+'\n')
+    f.write('Request sent to peers:\t\t'+str(requestSndToPeersCounter)+'\n')
     f.write('Bytes received from server:\t'+str(bytesRcvFromServerCounter)+'\n')
-    f.write('Bytes sent to server:\t'+str(bytesSndToServerCounter)+'\n')
+    f.write('Bytes sent to server:\t\t'+str(bytesSndToServerCounter)+'\n')
     f.write('Bytes received from peers:\t'+str(bytesRcvFromPeersCounter)+'\n')
-    f.write('Bytes sent to peers:\t'+str(bytesSndToPeersCounter)+'\n')
+    f.write('Bytes sent to peers:\t\t'+str(bytesSndToPeersCounter)+'\n')
+    f.write('Avg. peer response time:\t'+str(peersResponseTime/requestSndToPeersCounter)+'\n')
+    f.write('Avg. server response time:\t'+ str(serverResponseTime/requestSndToServerCounter)+'\n')
     f.close()
     # Close the server
     server.close()

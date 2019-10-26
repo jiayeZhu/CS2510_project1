@@ -222,7 +222,7 @@ f = open('server.stat','w')
 f.write('========== Server statistical result ==========\n')
 f.write('Request received:\t'+str(requestRcvCounter)+'\n')
 f.write('Bytes Received:\t'+str(bytesRcvCounter)+'\n')
-f.write('bytes Send:\t'+str(bytesSndCounter)+'\n')
+f.write('bytes Send:\t\t'+str(bytesSndCounter)+'\n')
 f.close()
 # Close the server
 server.close()
