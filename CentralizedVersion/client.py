@@ -15,7 +15,6 @@ serverAddr = ''
 serverPort = 0
 fileHashToFile = {}
 fileList = []
-M = 0
 N = 0
 f = 0
 
@@ -27,7 +26,7 @@ def print_help():
           "\t-i <dir of files you want to share>\n"
           "\t-o <dir for downloading files from others>\n"
           "\t-N <Number of sequential requests>\n"
-          "\t-F <request interval in seconds>\n")
+          "\t-f <request interval in seconds>\n")
     return
 
 
@@ -170,7 +169,6 @@ async def main():
     global serverAddr
     global serverPort
     global fileList
-    global M
     global N
     global f
     
@@ -238,7 +236,7 @@ async def main():
 if __name__ == "__main__":
     #options parser
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hs:p:i:o:M:N:f:')
+        opts, args = getopt.getopt(sys.argv[1:], 'hs:p:i:o:N:f:')
         # print(opts)
     except getopt.GetoptError:
         print_help()
@@ -256,13 +254,11 @@ if __name__ == "__main__":
         elif opt == '-s':
             serverAddr = arg.split(':')[0]
             serverPort = int(arg.split(':')[1])
-        elif opt == '-M':
-            M = int(arg)
         elif opt == '-N':
             N = int(arg)
         elif opt == '-f':
             f = float(arg)
-    if sharingDir=='' or downloadingDir=='' or serverAddr=='' or port * M * N * f * serverPort == 0:
+    if sharingDir=='' or downloadingDir=='' or serverAddr=='' or port  * N * f * serverPort == 0:
         print_help()
         sys.exit()
 
