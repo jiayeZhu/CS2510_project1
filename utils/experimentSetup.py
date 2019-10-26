@@ -63,9 +63,3 @@ for i in range(n):
     genFiles(sharingDir,M,MIN,MAX)
     # os.system('python3 ./CentralizedVersion/client.py -p '+str(startPort+i)+' -s 127.0.0.1:8888 -i '+sharingDir+' -o '+downloadingDir+' -N '+str(N)+' -f'+str(f)+' > client_'+str(i)+'.log &')
 
-
-
-
-print('a')
-
-
