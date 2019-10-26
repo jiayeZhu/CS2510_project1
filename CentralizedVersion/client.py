@@ -321,7 +321,7 @@ if __name__ == "__main__":
     statName.update(str(random.random()))
     statName = statName.hexdigest()
     statFileName = 'client_'+statName+'.stat'
-    f = open(statFileName)
+    f = open(statFileName,'wb')
     f.write('Request sent to server:\t'+str(requestSndToServerCounter)+'\n')
     f.write('Request received from server:\t'+str(requestRcvFromPeersCounter)+'\n')
     f.write('Request sent to peers:\t'+str(requestSndToPeersCounter)+'\n')

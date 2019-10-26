@@ -218,7 +218,7 @@ try:
 except KeyboardInterrupt:
     pass
 
-f = open('server.stat')
+f = open('server.stat','wb')
 f.write('Request received:\t'+str(requestRcvCounter)+'\n')
 f.write('Bytes Received:\t'+str(bytesRcvCounter)+'\n')
 f.write('bytes Send:\t'+str(bytesSndCounter)+'\n')
