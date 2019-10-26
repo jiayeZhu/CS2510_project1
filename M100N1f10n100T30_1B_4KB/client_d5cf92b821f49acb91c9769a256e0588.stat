@@ -1,0 +1,10 @@
+========== Client statistical result ==========
+Request sent to server:		14
+Request received from server:	54
+Request sent to peers:		7
+Bytes received from server:	1045742
+Bytes sent to server:		69553
+Bytes received from peers:	11817
+Bytes sent to peers:		3387
+Avg. peer response time:	0.34709221299999626
+Avg. server response time:	0.006880181357181365
