@@ -26,7 +26,6 @@ def print_help():
           "\t-s <index server address>\n"
           "\t-i <dir of files you want to share>\n"
           "\t-o <dir for downloading files from others>\n"
-          "\t-M <number of files to share>\n"
           "\t-N <Number of sequential requests>\n"
           "\t-F <request interval in seconds>\n")
     return
