@@ -318,10 +318,10 @@ if __name__ == "__main__":
         print('client out')
         pass
     statName = hashlib.md5()
-    statName.update(str(random.random()))
+    statName.update(str(random.random()).encode())
     statName = statName.hexdigest()
     statFileName = 'client_'+statName+'.stat'
-    f = open(statFileName,'wb')
+    f = open(statFileName,'w')
     f.write('Request sent to server:\t'+str(requestSndToServerCounter)+'\n')
     f.write('Request received from server:\t'+str(requestRcvFromPeersCounter)+'\n')
     f.write('Request sent to peers:\t'+str(requestSndToPeersCounter)+'\n')
