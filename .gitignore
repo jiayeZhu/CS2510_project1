@@ -111,3 +111,5 @@ sharing*/
 smallSharing*/
 utils/*.mp4
 downloads*/
+
+.DS_Store
