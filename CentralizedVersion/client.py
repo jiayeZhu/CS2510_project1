@@ -19,6 +19,11 @@ N = 0
 f = 0
 stopAfter = -1
 
+
+statName = hashlib.md5()
+statName.update(str(random.random()).encode())
+statName = statName.hexdigest()
+
 # requestRcvFromServerCounter = 0
 requestSndToServerCounter = 0
 requestRcvFromPeersCounter = 0
@@ -207,6 +212,53 @@ async def shutdownManager():
                 loop.stop()
             await asyncio.sleep(2) 
 
+async def clientMetricCollector():
+    global requestSndToServerCounter
+    global requestRcvFromPeersCounter
+    global requestSndToPeersCounter
+    global bytesRcvFromServerCounter
+    global bytesSndToServerCounter
+    global bytesRcvFromPeersCounter
+    global bytesSndToPeersCounter
+    global serverResponseTime
+    global peersResponseTime 
+    f = open('client_'+statName+'_metric.csv','w')
+    f.write('Time,RequestSentToServer,RequestReceivedFromPeers,RequestSentToPeers,BytesReceivedFromServer,BytesSentToServer,BytesReceivedFromPeer,BytesSentToPeer,ServerResponseTime,PeersResponseTime\n')
+    _rSTS = requestSndToServerCounter
+    _rRFP = requestRcvFromPeersCounter
+    _rSTP = requestSndToPeersCounter
+    _bRFS = bytesRcvFromServerCounter
+    _bSTS = bytesSndToServerCounter
+    _bRFP = bytesRcvFromPeersCounter
+    _bSTP = bytesSndToPeersCounter
+    _sRT = serverResponseTime
+    _pRT = peersResponseTime
+    loop = asyncio.get_event_loop()
+    start_time = loop.time()
+    while True:
+        timePassed = loop.time()-start_time
+        new_rSTS = requestSndToServerCounter - _rSTS
+        new_rRFP = requestRcvFromPeersCounter - _rRFP
+        new_rSTP = requestSndToPeersCounter - _rSTP
+        new_bRFS = bytesRcvFromServerCounter - _bRFS
+        new_bSTS = bytesSndToServerCounter - _bSTS
+        new_bRFP = bytesRcvFromPeersCounter - _bRFP
+        new_bSTP = bytesSndToPeersCounter - _bSTP
+        new_sRT = serverResponseTime - _sRT
+        new_pRT = peersResponseTime - _pRT
+        f.write('{},{},{},{},{},{},{},{},{},{}\n'.format(timePassed,new_rSTS,new_rRFP,new_rSTP,new_bRFS,new_bSTS,new_bRFP,new_bSTP,new_sRT/new_rSTS,new_pRT/new_rSTP))
+        _rSTS = requestSndToServerCounter
+        _rRFP = requestRcvFromPeersCounter
+        _rSTP = requestSndToPeersCounter
+        _bRFS = bytesRcvFromServerCounter
+        _bSTS = bytesSndToServerCounter
+        _bRFP = bytesRcvFromPeersCounter
+        _bSTP = bytesSndToPeersCounter
+        _sRT = serverResponseTime
+        _pRT = peersResponseTime
+        await asyncio.sleep(1)
+
+
 async def main():
     global port
     global sharingDir
@@ -332,14 +384,12 @@ if __name__ == "__main__":
     print('Start sharing at {}'.format(server.sockets[0].getsockname()))
     loop.create_task(main())
     loop.create_task(shutdownManager())
+    loop.create_task(clientMetricCollector())
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         print('client out')
         pass
-    statName = hashlib.md5()
-    statName.update(str(random.random()).encode())
-    statName = statName.hexdigest()
     statFileName = 'client_'+statName+'.stat'
     f = open(statFileName,'w')
     f.write('========== Client statistical result ==========\n')

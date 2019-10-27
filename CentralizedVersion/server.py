@@ -2,6 +2,7 @@ import asyncio
 import json
 import getopt
 import sys
+import psutil
 
 fileHashToPeerList = {}
 peerToFileHashes = {}
@@ -190,6 +191,37 @@ async def shutdownManager():
                 loop.stop()
             await asyncio.sleep(2)
 
+async def systemMetricCollector():
+    f = open('systemMetric.csv','w')
+    f.write('time,cpuUtilization,memoryUtilization\n')
+    loop = asyncio.get_event_loop()
+    start_time = loop.time()
+    while True:
+        cpuUtil = psutil.cpu_percent()
+        memUtil = psutil.virtual_memory()[2]
+        timePassed = loop.time()-start_time
+        f.write(str(timePassed)+','+str(cpuUtil)+','+str(memUtil)+'\n')
+        await asyncio.sleep(1)
+
+async def serverMetricCollector():
+    global requestRcvCounter 
+    global bytesRcvCounter 
+    global bytesSndCounter 
+    f = open('sererMetric.csv','w')
+    f.write('time,requestReceived,bytesReceived,BytedSent\n')
+    _rR = requestRcvCounter
+    _bR = bytesRcvCounter
+    _bS = bytesSndCounter
+    loop = asyncio.get_event_loop()
+    start_time = loop.time()
+    while True:
+        timePassed = loop.time()-start_time
+        f.write(str(timePassed)+','+str(requestRcvCounter-_rR)+','+str(bytesRcvCounter-_bR)+','+str(bytesSndCounter-_bS)+'\n')
+        _rR = requestRcvCounter
+        _bR = bytesRcvCounter
+        _bS = bytesSndCounter
+        await asyncio.sleep(1)
+
 
 #options parser
 try:
@@ -210,6 +242,8 @@ coro = asyncio.start_server(tcp_handler, '127.0.0.1', 8888, loop=loop)
 server = loop.run_until_complete(coro)
 loop.create_task(printCache())
 loop.create_task(shutdownManager())
+loop.create_task(systemMetricCollector())
+loop.create_task(serverMetricCollector())
 # Serve requests until Ctrl+C is pressed
 print('Serving on {}'.format(server.sockets[0].getsockname()))
 try:
