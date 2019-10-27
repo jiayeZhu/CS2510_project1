@@ -186,7 +186,6 @@ async def shutdownManager():
         start_time = loop.time()
         while True:
             timePassed = loop.time() - start_time
-            print(timePassed)
             if timePassed >= stopAfter:
                 loop.stop()
             await asyncio.sleep(2)
