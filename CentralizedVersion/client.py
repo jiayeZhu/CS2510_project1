@@ -207,7 +207,7 @@ async def shutdownManager():
         start_time = loop.time()
         while True:
             timePassed = loop.time() - start_time
-            print(timePassed)
+            # print(timePassed)
             if timePassed >= stopAfter:
                 loop.stop()
             await asyncio.sleep(2) 
@@ -246,7 +246,9 @@ async def clientMetricCollector():
         new_bSTP = bytesSndToPeersCounter - _bSTP
         new_sRT = serverResponseTime - _sRT
         new_pRT = peersResponseTime - _pRT
-        f.write('{},{},{},{},{},{},{},{},{},{}\n'.format(timePassed,new_rSTS,new_rRFP,new_rSTP,new_bRFS,new_bSTS,new_bRFP,new_bSTP,new_sRT/new_rSTS,new_pRT/new_rSTP))
+        realSRT = 0 if new_rSTS == 0 else new_sRT/new_rSTS
+        realPRT = 0 if new_rSTP == 0 else new_pRT/new_rSTP
+        f.write('{},{},{},{},{},{},{},{},{},{}\n'.format(timePassed,new_rSTS,new_rRFP,new_rSTP,new_bRFS,new_bSTS,new_bRFP,new_bSTP,realSRT,realPRT))
         _rSTS = requestSndToServerCounter
         _rRFP = requestRcvFromPeersCounter
         _rSTP = requestSndToPeersCounter
@@ -256,7 +258,7 @@ async def clientMetricCollector():
         _bSTP = bytesSndToPeersCounter
         _sRT = serverResponseTime
         _pRT = peersResponseTime
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
 
 
 async def main():

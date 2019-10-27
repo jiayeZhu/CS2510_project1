@@ -220,7 +220,7 @@ async def serverMetricCollector():
         _rR = requestRcvCounter
         _bR = bytesRcvCounter
         _bS = bytesSndCounter
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
 
 
 #options parser
