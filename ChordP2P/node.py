@@ -32,16 +32,15 @@ class Node:
         print('Listening on {}:{}'.format(ip, port))
         
 
-    # keep the state of this node up-to-date.
+        # keep the state of this node up-to-date.
         Func([None,None], self).start()
-        print ("-------")
 
-        while True:
-            print ("accept")
-            peer = s.accept()
-            print ("after accept")
-            Func(peer, self).start()
-            print ("after func")
+        #keep accepting new command
+        # while True:
+        #     peer = s.accept()
+        #     print ("after accept")
+        #     Func(peer, self).start()
+        #     print ("after func")
 
         s.close()
 

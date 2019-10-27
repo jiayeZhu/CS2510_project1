@@ -2,6 +2,7 @@ from threading import Thread
 from address  import Address
 import socket
 import time
+import sys
 
 default_sleep_time = 1
 
@@ -17,15 +18,30 @@ class Func(Thread):
         self.state = state
 
     def run(self):
-        # data = self.conn.recv(1024)
-        # todo
+        while True:
+            print('-----------------------')
+            print("usage : \n exit: exit the system \n ping: ping the current node \n create_ring: create a new ring \n join <ip> <port>: join an existing ring")
+            print('-----------------------')
+            command = input('>>')
+            # print(command)
+            command = command.split(' ')
+            if command[0] =="create_ring":
+                print(self.create_ring())
+            elif command[0] =="join":
+                if (len(command) != 3):
+                    print("usage : join <ip> <port>")
+                else:
+                    print(self.join(command[1], int(command[2])))
+            elif command[0] == 'ping':
+                print(self.ping())
+            elif command[0] == 'exit':
+                sys.exit(1)
 
         # keep the state of this node up-to-date.
-        while True:
-            print (self.conn)
-            if self.state.in_ring:
-                self.stabilize()
-            time.sleep(default_sleep_time)
+            # print (self.conn)
+            # if self.state.in_ring:
+            #     self.stabilize()
+            # time.sleep(default_sleep_time)
 
     def ping(self):
         print ('ping called')
