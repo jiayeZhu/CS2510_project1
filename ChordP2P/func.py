@@ -3,6 +3,7 @@ from address  import Address
 import socket
 import time
 import sys
+import os
 
 default_sleep_time = 1
 
@@ -11,17 +12,37 @@ def between(hash1, hash2, hash3):
         return True
 
 class Func(Thread):
-    def __init__(self, peer, state):
+    def __init__(self, peer, state, initial = False):
+        
         super().__init__()
-        self.conn = peer[0]   
-        self.peer_addr = peer[1]
         self.state = state
+        if(initial == False):
+            self.conn = peer[0]   
+            self.peer_addr = peer[1]
+            data = self.conn.recv(1024)
+            request = data.decode('utf-8').split(' ')
+            print('data received : ', request)
+            ans = self.check_request(request)
+            if(ans == None):
+                ans = self.peer_addr
+            self.conn.sendall(ans.encode())
+            self.conn.close()
+
+
+                
+    def check_request(self, request):
+        try:
+            if((request[0] == 'find_successor') and (len(request) == 2)):
+                return (self.find_successor(int(request[1])))  
+
+            else:
+                print('Invalid function')
+                return ('Invalid function')
+        except Exception as e:
+            print(e)
 
     def run(self):
         while True:
-            print('-----------------------')
-            print("usage : \n exit: exit the system \n ping: ping the current node \n create_ring: create a new ring \n join <ip> <port>: join an existing ring")
-            print('-----------------------')
             command = input('>>')
             # print(command)
             command = command.split(' ')
@@ -31,11 +52,17 @@ class Func(Thread):
                 if (len(command) != 3):
                     print("usage : join <ip> <port>")
                 else:
-                    print(self.join(command[1], int(command[2])))
+                    return (self.join(command[1], int(command[2])))
             elif command[0] == 'ping':
                 print(self.ping())
             elif command[0] == 'exit':
-                sys.exit(1)
+                # sys.exit()
+                os._exit(0)
+            else:
+                print('-----------------------')
+                print("usage : \n exit: exit the system \n ping: ping the current node \n create_ring: create a new ring \n join <ip> <port>: join an existing ring")
+                print('-----------------------')
+                continue
 
         # keep the state of this node up-to-date.
             # print (self.conn)
@@ -58,19 +85,25 @@ class Func(Thread):
 
     def send(self, remote_addr, data):
         ip, port = remote_addr.ip, remote_addr.port
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((ip, int(port)))
-        s.sendall(data.encode())
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            print('send to : ', ip , ':' , port)
+            s.connect((ip, int(port)))
+            s.sendall(data.encode())
+        except Exception as e:
+            print(e)
         return s
 
     def join(self, ip, port):
-        print('joining {}:{}'.format(ip, port))
         try:
             # new node requests the wizard(ip, port) to find its successor
             s = self.send(Address(ip, port), 'find_successor {}'.format(self.state.id))   
             data = s.recv(1024).decode('utf-8')
+            # print('data: ' , data)
+            # print("data.split(':')  " , data.split(':')  )
             successor_ip, successor_port = data.split(':')   
-            s.close()   
+            print(successor_ip, '  ,', successor_port)
+            s.close()
             self.state.lock.acquire()
             self.state.addr_dict[str(self.state.id)] = self.state.address
             self.state.successor = Address(successor_ip, successor_port)
@@ -78,27 +111,39 @@ class Func(Thread):
             self.state.addr_dict[str(self.state.finger[0])] = self.state.successor
             self.state.in_ring = True
             self.state.lock.release() 
-            self.stabilize()           
+            self.stabilize()        
+            print("stablized is done")   
             return 'successor found to be {}:{}'.format(successor_ip, successor_port)
-        except:
+        except Exception as e:
+            print(e)
             return "Error while joining the chord"
 
     def  find_successor(self, id):
         # if id should be the first node
-            #todo
-        # if id should be the last node
-            #todo
-        #else
-        if(between(id, self.state.id, self.state.successor.id)):
-            return '{}:{}'.format(self.state.successor.address.ip, self.state.successor.address.port)
-        else:
-            for i in len(self.state.finger):
-                if(between(id, self.state.finger[i]), self.state.finger[i + 1]):
-                    next_ip = self.state.addr_dict[str(self.state.finger[i])].ip
-                    next_port = self.state.addr_dict[str(self.state.finger[i])].port
-                    break
-            s = self.send(Address(next_ip, next_port), 'find_successor {}'.format(id))
-            return s.recv(1024).decode('utf-8')
+        try:
+            print('find_successor is active')
+            if((id < self.state.id) and (self.state.predecessor == None)):
+                return '{}:{}'.format(self.state.ip, self.state.port)
+            # if id should be the last node
+            elif((id > self.state.id) and (self.state.successor == None)):
+                print(2)
+                return None
+            #else
+            elif(between(id, self.state.id, self.state.successor.id)):
+                print(3)
+                return '{}:{}'.format(self.state.successor.address.ip, self.state.successor.address.port)
+            else:
+                print(4)
+                for i in len(self.state.finger):
+                    if(between(id, self.state.finger[i]), self.state.finger[i + 1]):
+                        next_ip = self.state.addr_dict[str(self.state.finger[i])].ip
+                        next_port = self.state.addr_dict[str(self.state.finger[i])].port
+                        break
+                s = self.send(Address(next_ip, next_port), 'find_successor {}'.format(id))
+                print(5)
+                return s.recv(1024).decode('utf-8')
+        except Exception as e:
+            print(e)
 
     def stabilize(self):
         try:

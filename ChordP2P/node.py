@@ -4,43 +4,38 @@ import sys
 import os
 from func import Func
 from address import Address
+from state import State
 
 M = 20
 
 class Node:
     def start(self, port):
-
-        # initialize the state of a new node
-        self.in_ring = False
-        self.ip = socket.gethostbyname(socket.gethostname())
-        self.port = port
-        self.address = Address(self.ip, self.port)
-        self.id = self.address.hash
-        # self.id = abs(hash(('{}:{}'.format(self.ip, int(port))).encode())) % 2 ** M
-        self.predecessor = None
-        self.successor = None
-        self.finger = {}  # contains finger nodes' Chord ids
-        self.addr_dict = {}  # key: a Chord id; value: corresponding Address (IP/port) 
-        self.i = 1
-        self.lock = Lock()
+        self = State(port)
 
         # bind socket
-        ip = self.ip
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((ip, port))
-        s.listen()
-        print('Listening on {}:{}'.format(ip, port))
-        
+        try:
+          ip = self.ip
+          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          s.bind((ip, port))
+          s.listen()
+          self.sock = s
+          print('Listening on {}:{}'.format(ip, port))
+        except Exception as e:
+          print(e)
+
+        # print the usage of this system
+        print('-----------------------')
+        print("usage : \n ping: ping the current node \n create_ring: create a new ring \n join <ip> <port>: join an existing ring \n exit: exit the system ")
+        print('-----------------------')
 
         # keep the state of this node up-to-date.
-        Func([None,None], self).start()
-
+        Func([None,None], self, True).start()
         #keep accepting new command
-        # while True:
-        #     peer = s.accept()
-        #     print ("after accept")
-        #     Func(peer, self).start()
-        #     print ("after func")
+        while True:
+          peer = s.accept()
+          print ("after accept")
+          Func(peer, self, False).start()
+          print ("after func")
 
         s.close()
 
