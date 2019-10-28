@@ -5,7 +5,6 @@ import getopt
 import os
 import hashlib
 import random
-from aiomultiprocess import Worker
 
 
 port = 0
