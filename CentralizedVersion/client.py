@@ -166,8 +166,8 @@ async def fileTransferHandler(data,writer):
     fileName = os.path.join(sharingDir,fileName)
     myChunkNumber = data['chunk']
     totalChunkNumber = data['total']
-    p = Worker(target=fileReader, args=(fileName, myChunkNumber,totalChunkNumber))
-    chunk = await p
+    # p = Worker(target=fileReader, args=(fileName, myChunkNumber,totalChunkNumber))
+    chunk = await fileReader(fileName, myChunkNumber,totalChunkNumber)
     writer.write(b'\x01')    #add one byte at head for calculating response time
     writer.write(chunk)
     writer.write_eof()
@@ -336,14 +336,18 @@ async def main():
         all_task = asyncio.wait(tasks)
         await loop.create_task(all_task)
         writerWorkers = []
+        tasks = []
         for i in range(N):
             _file_ = b''
             for j in range(len(files[i])):
                 _file_ += files[i][j]
             files[i] = _file_
             # print(len(files[i]))
-            writerWorkers.append(Worker(target=fileWriter, args=(os.path.join(downloadingDir,filesToFetch[i]), files[i])))
-        await loop.create_task(asyncio.wait(writerWorkers))
+            tasks.append(fileWriter(os.path.join(downloadingDir,filesToFetch[i]), files[i]))
+            # writerWorkers.append(Worker(target=fileWriter, args=(os.path.join(downloadingDir,filesToFetch[i]), files[i])))
+        # await loop.create_task(asyncio.wait(writerWorkers))
+        all_task = async.wait(tasks)
+        await loop.create_task(all_task)
         print('written')
         if f - (loop.time()-t_loopstart) > 0:
             await asyncio.sleep(f - (loop.time()-t_loopstart))
