@@ -5,6 +5,7 @@ import getopt
 import os
 import hashlib
 import random
+import psutil
 
 localIp = '127.0.0.1'
 port = 0
@@ -23,6 +24,7 @@ localAddress=''
 isSmallest = False
 isBiggest = False
 filesInDownloading = []
+isFirstNode = False
 
 statName = hashlib.md5()
 statName.update(str(random.random()).encode())
@@ -32,7 +34,15 @@ requestRcvFromPeersCounter = 0
 requestSndToPeersCounter = 0
 bytesRcvFromPeersCounter = 0
 bytesSndToPeersCounter = 0
-peersResponseTime = 0
+peersResponseTime = 0 #in this case it's file transfer peers response time
+requestForFilesCounter = 0
+
+# requestTimers={}
+
+# def genReqTag():
+#     h = hashlib.md5()
+#     h.update(str(random.random()).encode())
+#     return h.hexdigest()
 
 def print_help():
     print("python3 client.py [options]\n"
@@ -47,20 +57,6 @@ def print_help():
           "\t-T <stop after T seconds>(default=-1 means forever)")
     return
 
-# def commandGenerator(tp,files=[],diffs={}):
-#     global port
-#     command = {'cmd':tp,'port':port}
-#     if tp == 'reg':
-#         command['files'] = files
-#     elif tp == 'update':
-#         command['diffs'] = diffs
-#     elif tp == 'search':
-#         command['files'] = files
-#     if tp not in ['reg','update','unreg','search','ls']:
-#         raise Exception('Wrong command')
-#     # print(command)
-#     return json.dumps(command)
-
 
 def scanFiles(directory):
     fList = os.listdir(directory)
@@ -68,37 +64,40 @@ def scanFiles(directory):
 
 async def fileReader(filename,myChunkNumber,totalChunkNumber):
     # print('FILENAME:',filename)
-    fileSize = os.stat(filename).st_size
-    start = int(fileSize * myChunkNumber/totalChunkNumber)
-    end = int(fileSize * (myChunkNumber+1)/totalChunkNumber)
-    dataLength = end-start
-    f = open(filename,'rb')
-    f.seek(start,0)
-    chunk = f.read(dataLength)
-    f.close()
-    return chunk
+    try:
+        fileSize = os.stat(filename).st_size
+        start = int(fileSize * myChunkNumber/totalChunkNumber)
+        end = int(fileSize * (myChunkNumber+1)/totalChunkNumber)
+        dataLength = end-start
+        f = open(filename,'rb')
+        f.seek(start,0)
+        chunk = f.read(dataLength)
+        f.close()
+        return chunk
+    except FileNotFoundError:
+        print('ERROR with read file:',filename,' chunkNumber:',myChunkNumber,' total:',totalChunkNumber)
+        return b''
+    
 
-#TODO: 没做peer resposne time机算
 async def tcp_client(peerAddress,message):
     global bytesSndToPeersCounter
-    global bytesRcvFromPeersCounter
+    global requestSndToPeersCounter
+
+    requestSndToPeersCounter += 1
+    
     loop = asyncio.get_event_loop()
     reader, writer = await asyncio.open_connection(peerAddress.split(':')[0],peerAddress.split(':')[1], loop=loop)
     writer.write(message.encode())
     bytesSndToPeersCounter += len(message.encode())
     writer.write_eof()
     await writer.drain()
-    #TODO: 要等消息吗？？
-    # data = await reader.read()
-    # bytesRcvFromPeersCounter += len(data)
     writer.close()
-    # print('Received: %r' % data.decode())
-    # return data
     return
 
 
 async def RequestForFile(filedata,fileName,targetAddress,chunk,total):
     global requestSndToPeersCounter
+    global requestForFilesCounter
     global bytesSndToPeersCounter
     global bytesRcvFromPeersCounter
     global peersResponseTime
@@ -106,11 +105,12 @@ async def RequestForFile(filedata,fileName,targetAddress,chunk,total):
     loop = asyncio.get_event_loop()
     reader, writer = await asyncio.open_connection(targetAddress.split(':')[0], int(targetAddress.split(':')[1]),
                                                    loop=loop)
-    print('connected to:',targetAddress,' for downloading file')
+    print('connected to:',targetAddress,' for downloading file:',fileName)
     req = json.dumps({'cmd':'get','chunk':chunk,'total':total,'file':fileName}).encode()
     writer.write(req)
     writer.write_eof()
     requestSndToPeersCounter += 1
+    requestForFilesCounter += 1
     bytesSndToPeersCounter += len(req)
     await writer.drain()
     t_start = loop.time()
@@ -256,11 +256,11 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
     f_hash = getHashPos(fileName)
     if not isSmallest and not isBiggest:
         if f_hash < preHash :  #msg must come from successor
-            await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
+            await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':peerAddress,'file':fileName,'port':port}))
             return
         elif f_hash > preHash and f_hash < localHash:
             if not msgFrom == pre:
-                await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
+                await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':peerAddress,'file':fileName,'port':port}))
             if fileName not in filesIHave and fileName not in filesInDownloading:
                 filesInDownloading.append(fileName)
                 fileData = [b'']
@@ -270,7 +270,7 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
             return
         elif f_hash > localHash and f_hash < sucHash:
             if not msgFrom == suc:
-                await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
+                await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':peerAddress,'file':fileName,'port':port}))
             if fileName not in filesIHave and fileName not in filesInDownloading:
                 filesInDownloading.append(fileName)
                 fileData = [b'']
@@ -279,12 +279,12 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
                 filesInDownloading.remove(fileName)
             return
         elif f_hash > sucHash:
-            await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
+            await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':peerAddress,'file':fileName,'port':port}))
             return
     elif isSmallest:
         if f_hash < sucHash:  #must come from successor
             if f_hash < localHash:
-                await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
+                await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':peerAddress,'file':fileName,'port':port}))
             if fileName not in filesIHave and fileName not in filesInDownloading:
                 filesInDownloading.append(fileName)
                 fileData = [b'']
@@ -303,7 +303,7 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
     elif isBiggest:
         if f_hash > preHash:  #must come from predecessor
             if f_hash > localHash:
-                await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
+                await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':peerAddress,'file':fileName,'port':port}))
             if fileName not in filesIHave and fileName not in filesInDownloading:
                 filesInDownloading.append(fileName)
                 fileData = [b'']
@@ -431,8 +431,9 @@ async def clientMetricCollector():
     global bytesSndToPeersCounter
     # global serverResponseTime
     global peersResponseTime 
+    global requestForFilesCounter
     f = open('client_'+statName+'_metric.csv','w')
-    f.write('Time,RequestReceivedFromPeers,RequestSentToPeers,BytesReceivedFromPeer,BytesSentToPeer,PeersResponseTime\n')
+    f.write('Time,RequestReceivedFromPeers,RequestSentToPeers,BytesReceivedFromPeer,BytesSentToPeer,PeersResponseTime,RequestForFiles\n')
     # _rSTS = requestSndToServerCounter
     _rRFP = requestRcvFromPeersCounter
     _rSTP = requestSndToPeersCounter
@@ -442,6 +443,7 @@ async def clientMetricCollector():
     _bSTP = bytesSndToPeersCounter
     # _sRT = serverResponseTime
     _pRT = peersResponseTime
+    _rFF = requestForFilesCounter
     loop = asyncio.get_event_loop()
     start_time = loop.time()
     while True:
@@ -455,9 +457,10 @@ async def clientMetricCollector():
         new_bSTP = bytesSndToPeersCounter - _bSTP
         # new_sRT = serverResponseTime - _sRT
         new_pRT = peersResponseTime - _pRT
+        new_rFF = requestForFilesCounter - _rFF
         # realSRT = 0 if new_rSTS == 0 else new_sRT/new_rSTS
-        realPRT = 0 if new_rSTP == 0 else new_pRT/new_rSTP
-        f.write('{},{},{},{},{},{}\n'.format(timePassed,new_rRFP,new_rSTP,new_bRFP,new_bSTP,realPRT))
+        realPRT = 0 if new_rFF == 0 else new_pRT/new_rFF
+        f.write('{},{},{},{},{},{},{}\n'.format(timePassed,new_rRFP,new_rSTP,new_bRFP,new_bSTP,realPRT,new_rFF))
         # _rSTS = requestSndToServerCounter
         _rRFP = requestRcvFromPeersCounter
         _rSTP = requestSndToPeersCounter
@@ -467,6 +470,7 @@ async def clientMetricCollector():
         _bSTP = bytesSndToPeersCounter
         # _sRT = serverResponseTime
         _pRT = peersResponseTime
+        _rFF = requestForFilesCounter
         await asyncio.sleep(5)
 
 #TODO: finish it
@@ -482,8 +486,7 @@ async def main():
     global suc
     global pre
     global localAddress
-
-    isFirstNode = False
+    global isFirstNode
 
     #step1 join
     if not serverAddr == '':
@@ -497,13 +500,16 @@ async def main():
     # print('finish join')
     #step2 file syncing
     # print(localAddress)
+    loop = asyncio.get_event_loop()
     if isFirstNode:
+        loop.create_task(systemMetricCollector())
         fileList = scanFiles(sharingDir) if len(fileList)==0 else fileList
         await LS(fileList)
+
     await tcp_client(suc,json.dumps({'cmd':'NEEDSYNC','sourcePeer':localAddress}))
     # print('syncing')
     #ready for sharing
-    loop = asyncio.get_event_loop()
+    
     while True:
         t_loopstart = loop.time()
         filesToDownload = random.sample(fileList,N)  # randomly choose N files to fetch from the p2p network
@@ -581,25 +587,24 @@ async def peerHandler(reader,writer):
         await fileTransferHandler(data, writer)
         return
     if cmd == "search":
-        print('get search')
+        # print('get search')
         await searchHandler(data)
         return
     if cmd == 'result':
         await downloadFiles(data)
         return
-    # if cmd == "unreg":
-    #     await unregHandler(peer, writer)
-    #     return
-    # if cmd == "search":
-    #     await searchHandler(data, writer)
-    #     return
-    # if cmd == "update":
-    #     await updateRegHandler(peer, data, writer)
-    #     return
-    # if cmd == "ls":
-    #     await listAllHandler(writer)
-    #     return
 
+async def systemMetricCollector():
+    f = open('systemMetric.csv','w')
+    f.write('time,cpuUtilization,memoryUtilization\n')
+    loop = asyncio.get_event_loop()
+    start_time = loop.time()
+    while True:
+        cpuUtil = psutil.cpu_percent()
+        memUtil = psutil.virtual_memory()[2]
+        timePassed = loop.time()-start_time
+        f.write(str(timePassed)+','+str(cpuUtil)+','+str(memUtil)+'\n')
+        await asyncio.sleep(1)
 
 async def lsManager():
     global fileList
@@ -648,22 +653,24 @@ if __name__ == "__main__":
     print('Start sharing at {}'.format(server.sockets[0].getsockname()))
     loop.create_task(main())
     loop.create_task(shutdownManager())
+    
     # loop.create_task(lsManager())
-    # loop.create_task(clientMetricCollector())
+    loop.create_task(clientMetricCollector())
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         print('client out')
         pass
-    # statFileName = 'Node_'+statName+'.stat'
-    # f = open(statFileName,'w')
-    # f.write('========== Client statistical result ==========\n')
-    # f.write('Request received from server:\t'+str(requestRcvFromPeersCounter)+'\n')
-    # f.write('Request sent to peers:\t\t'+str(requestSndToPeersCounter)+'\n')
-    # f.write('Bytes received from peers:\t'+str(bytesRcvFromPeersCounter)+'\n')
-    # f.write('Bytes sent to peers:\t\t'+str(bytesSndToPeersCounter)+'\n')
-    # f.write('Avg. peer response time:\t'+str(peersResponseTime/requestSndToPeersCounter)+'\n')
-    # f.close()
+    statFileName = 'Node_'+statName+'.stat'
+    f = open(statFileName,'w')
+    f.write('========== Client statistical result ==========\n')
+    f.write('Request received from peers:\t'+str(requestRcvFromPeersCounter)+'\n')
+    f.write('Request sent to peers:\t\t'+str(requestSndToPeersCounter)+'\n')
+    f.write('Bytes received from peers:\t'+str(bytesRcvFromPeersCounter)+'\n')
+    f.write('Bytes sent to peers:\t\t'+str(bytesSndToPeersCounter)+'\n')
+    f.write('Requeset sent to peers for file:\t'+str(requestForFilesCounter)+'\n')
+    f.write('Avg. peer response time for file:\t'+str(peersResponseTime/requestForFilesCounter)+'\n')
+    f.close()
     # Close the server
     server.close()
     loop.run_until_complete(server.wait_closed())
