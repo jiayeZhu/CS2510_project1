@@ -238,7 +238,7 @@ for (opt, arg) in opts:
 
 
 loop = asyncio.get_event_loop()
-coro = asyncio.start_server(tcp_handler, '127.0.0.1', 8888, loop=loop)
+coro = asyncio.start_server(tcp_handler, '127.0.0.1', 18888, loop=loop)
 server = loop.run_until_complete(coro)
 loop.create_task(printCache())
 loop.create_task(shutdownManager())

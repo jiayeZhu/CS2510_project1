@@ -84,7 +84,9 @@ async def fileReader(filename,myChunkNumber,totalChunkNumber):
 async def tcp_client(message, loop):
     global bytesSndToServerCounter
     global bytesRcvFromServerCounter
-    reader, writer = await asyncio.open_connection('127.0.0.1', 8888, loop=loop)
+    global serverAddr
+    global serverPort
+    reader, writer = await asyncio.open_connection(serverAddr, serverPort, loop=loop)
     writer.write(message.encode())
     bytesSndToServerCounter += len(message.encode())
     await writer.drain()
