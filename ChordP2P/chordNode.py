@@ -84,7 +84,6 @@ async def tcp_client(peerAddress,message):
     global bytesRcvFromPeersCounter
     loop = asyncio.get_event_loop()
     reader, writer = await asyncio.open_connection(peerAddress.split(':')[0],peerAddress.split(':')[1], loop=loop)
-    print(message)
     writer.write(message.encode())
     bytesSndToPeersCounter += len(message.encode())
     writer.write_eof()
@@ -221,6 +220,27 @@ async def fileSync():
         elif f_hash < localHash:
             await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':f,'port':port}))
 
+
+#list all files
+async def LS(fList):
+    global sharingDir
+    global localAddress
+    global pre
+    global suc
+    global port
+    global fileList
+
+    preHash = getHashPos(pre)
+    localHash = getHashPos(localAddress)
+    sucHash = getHashPos(suc)
+
+    fSet = set(fList)
+    filesIHave = scanFiles(sharingDir)
+    fSet.update(filesIHave)
+    fileList = list(fSet)
+    await tcp_client(suc,json.dumps({'cmd':'LS','sourcePeer':localAddress,'fileList':fileList,'port':port}))
+
+
 async def fileSyncHandler(peerAddress,fileName,msgFrom):
     global sharingDir
     global localAddress
@@ -232,14 +252,8 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
     localHash = getHashPos(localAddress)
     sucHash = getHashPos(suc)
     filesIHave = scanFiles(sharingDir)
-    print('FILENAME################################:',fileName)
     
     f_hash = getHashPos(fileName)
-    print('FILEHASH:',f_hash)
-    print('LOCAHASH:',localHash)
-    print('PREDHASH:',preHash)
-    print('SUCSHASH:',sucHash)
-
     if not isSmallest and not isBiggest:
         if f_hash < preHash :  #msg must come from successor
             await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':fileName,'port':port}))
@@ -427,6 +441,7 @@ async def main():
     global pre
     global localAddress
 
+    isFirstNode = False
 
     #step1 join
     if not serverAddr == '':
@@ -434,11 +449,15 @@ async def main():
         await tcp_client('{}:{}'.format(serverAddr,serverPort),json.dumps({'cmd':'join','port':port}))
     while pre == None or suc == None:
         print('waiting peers...')
+        isFirstNode = True
         await asyncio.sleep(1)
     checkSmallestOrBiggest()
     # print('finish join')
     #step2 file syncing
     print(localAddress)
+    if isFirstNode:
+        fileList = scanFiles(sharingDir) if len(fileList)==0 else fileList
+        await LS(fileList)
     await tcp_client(suc,json.dumps({'cmd':'NEEDSYNC','sourcePeer':localAddress}))
     print('syncing')
     #ready for sharing
@@ -464,7 +483,7 @@ async def peerHandler(reader,writer):
     data = await reader.read()  # read socket data
     bytesRcvFromPeersCounter += len(data)  #count bytes received
     addr = writer.get_extra_info('peername')  # get peer's ip
-    print("Received data from ", addr)  # log request
+    # print("Received data from ", addr)  # log request
     data = json.loads(data)  # parse the request to object
     cmd = data['cmd']  # get commond part
     if cmd == "join":
@@ -490,12 +509,10 @@ async def peerHandler(reader,writer):
         return
     if cmd == 'sync':
         peer = ''
-        print(data.keys())
         if 'sourcePeer' in data.keys():
             peer = data['sourcePeer']
         else:
             peer = addr[0] + ':' + str(data['port'])  # create peer address
-        print('data:',data,'pre:',pre,'suc:',suc)
         await fileSyncHandler(peer,data['file'],addr[0] + ':' + str(data['port']))
         return
     if cmd == 'NEEDSYNC':
@@ -507,6 +524,12 @@ async def peerHandler(reader,writer):
         if not peer == localAddress:
             await tcp_client(suc,json.dumps(data))
             await fileSync()
+        return
+    if cmd == 'LS':
+        if isSmallest:
+            await asyncio.sleep(2)
+        fList = data['fileList']
+        await LS(fList)
         return
     if cmd == "get":
         await fileTransferHandler(data, writer)
@@ -524,6 +547,13 @@ async def peerHandler(reader,writer):
     #     await listAllHandler(writer)
     #     return
 
+
+async def lsManager():
+    global fileList
+
+    while True:
+        print('Current file list:',fileList)
+        await asyncio.sleep(2)
 
 
 if __name__ == "__main__":
@@ -565,6 +595,7 @@ if __name__ == "__main__":
     print('Start sharing at {}'.format(server.sockets[0].getsockname()))
     loop.create_task(main())
     loop.create_task(shutdownManager())
+    # loop.create_task(lsManager())
     # loop.create_task(clientMetricCollector())
     try:
         loop.run_forever()
