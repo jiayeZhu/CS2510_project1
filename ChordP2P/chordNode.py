@@ -479,7 +479,7 @@ async def clientMetricCollector():
         # _sRT = serverResponseTime
         _pRT = peersResponseTime
         _rFF = requestForFilesCounter
-        await asyncio.sleep(5)
+        await asyncio.sleep(0.5)
 
 #TODO: finish it
 async def main():
@@ -615,7 +615,7 @@ async def systemMetricCollector():
         memUtil = psutil.virtual_memory()[2]
         timePassed = loop.time()-start_time
         f.write(str(timePassed)+','+str(cpuUtil)+','+str(memUtil)+'\n')
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
 
 async def lsManager():
     global fileList

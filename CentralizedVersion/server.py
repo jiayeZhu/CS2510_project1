@@ -201,7 +201,7 @@ async def systemMetricCollector():
         memUtil = psutil.virtual_memory()[2]
         timePassed = loop.time()-start_time
         f.write(str(timePassed)+','+str(cpuUtil)+','+str(memUtil)+'\n')
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
 
 async def serverMetricCollector():
     global requestRcvCounter 
@@ -220,7 +220,7 @@ async def serverMetricCollector():
         _rR = requestRcvCounter
         _bR = bytesRcvCounter
         _bS = bytesSndCounter
-        await asyncio.sleep(5)
+        await asyncio.sleep(0.5)
 
 
 #options parser

@@ -258,7 +258,7 @@ async def clientMetricCollector():
         _bSTP = bytesSndToPeersCounter
         _sRT = serverResponseTime
         _pRT = peersResponseTime
-        await asyncio.sleep(5)
+        await asyncio.sleep(0.5)
 
 
 async def main():
