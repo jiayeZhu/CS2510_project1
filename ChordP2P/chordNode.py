@@ -84,6 +84,7 @@ async def tcp_client(peerAddress,message):
     global bytesRcvFromPeersCounter
     loop = asyncio.get_event_loop()
     reader, writer = await asyncio.open_connection(peerAddress.split(':')[0],peerAddress.split(':')[1], loop=loop)
+    print(message)
     writer.write(message.encode())
     bytesSndToPeersCounter += len(message.encode())
     writer.write_eof()
@@ -103,7 +104,7 @@ async def RequestForFile(filedata,fileName,targetAddress,chunk,total):
     global bytesRcvFromPeersCounter
     global peersResponseTime
 
-    loop = asyncio.get_event_loop
+    loop = asyncio.get_event_loop()
     reader, writer = await asyncio.open_connection(targetAddress.split(':')[0], int(targetAddress.split(':')[1]),
                                                    loop=loop)
     print('connected to:',targetAddress,' for downloading file')
@@ -214,11 +215,11 @@ async def fileSync():
     filesIHave = scanFiles(sharingDir)
     for f in filesIHave:
         f_hash = getHashPos(f)
-        if not isSmallest and not isBiggest:
-            if f_hash > localHash:
-                await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':f,'port':port}))
-            elif f_hash < localHash:
-                await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':f,'port':port}))
+        # if not isSmallest and not isBiggest:
+        if f_hash > localHash:
+            await tcp_client(suc,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':f,'port':port}))
+        elif f_hash < localHash:
+            await tcp_client(pre,json.dumps({'cmd':'sync','sourcePeer':localAddress,'file':f,'port':port}))
 
 async def fileSyncHandler(peerAddress,fileName,msgFrom):
     global sharingDir
@@ -309,18 +310,18 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
 async def search(filehash):
     pass
 
-# file transfer handler TODO: modify needed
+# file transfer handler
 async def fileTransferHandler(data,writer):
     global fileHashToFile
     global sharingDir
     global bytesSndToPeersCounter
 
-    fileName = fileHashToFile[data['hash']]
+    fileName = data['file']
     fileName = os.path.join(sharingDir,fileName)
     myChunkNumber = data['chunk']
     totalChunkNumber = data['total']
-    p = Worker(target=fileReader, args=(fileName, myChunkNumber,totalChunkNumber))
-    chunk = await p
+    chunk = await fileReader(fileName, myChunkNumber,totalChunkNumber)
+    # chunk = await p
     writer.write(b'\x01')    #add one byte at head for calculating response time
     writer.write(chunk)
     writer.write_eof()
@@ -434,8 +435,10 @@ async def main():
     while pre == None or suc == None:
         print('waiting peers...')
         await asyncio.sleep(1)
+    checkSmallestOrBiggest()
     # print('finish join')
     #step2 file syncing
+    print(localAddress)
     await tcp_client(suc,json.dumps({'cmd':'NEEDSYNC','sourcePeer':localAddress}))
     print('syncing')
     #ready for sharing
@@ -504,6 +507,9 @@ async def peerHandler(reader,writer):
         if not peer == localAddress:
             await tcp_client(suc,json.dumps(data))
             await fileSync()
+        return
+    if cmd == "get":
+        await fileTransferHandler(data, writer)
         return
     # if cmd == "unreg":
     #     await unregHandler(peer, writer)
