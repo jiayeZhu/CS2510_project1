@@ -1,4 +1,4 @@
-python3 CentralizedVersion/server.py -T $4 1>server.log 2>/dev/null &
+python3 CentralizedVersion/server.py -T $[1+$4] 1>server.log 2>/dev/null &
 sleep 1 #wait for the server to start up
 for((i = 0; i < $1; i++))
 do

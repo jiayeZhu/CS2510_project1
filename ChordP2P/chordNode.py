@@ -79,11 +79,11 @@ async def fileReader(filename,myChunkNumber,totalChunkNumber):
         return chunk
     except FileNotFoundError:
         print('ERROR with read file:',filename,' chunkNumber:',myChunkNumber,' total:',totalChunkNumber)
-        print('local:',localAddress,' suc:',suc,' pre:',pre)
-        print('fileHash:',getHashPos(filename))
-        print('localHash:',getHashPos(localAddress))
-        print('preHash:',getHashPos(pre))
-        print('sucHash:',getHashPos(suc))
+        print('local:\t',localAddress,' suc:',suc,' pre:',pre)
+        print('fileHash:\t',getHashPos(filename))
+        print('localHash:\t',getHashPos(localAddress))
+        print('preHash:\t',getHashPos(pre))
+        print('sucHash:\t',getHashPos(suc))
         return b''
     
 
@@ -345,19 +345,29 @@ async def searchHandler(data):
     
     if not isBiggest and not isSmallest:
         if f_hash < sucHash and f_hash > localHash:
-            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc]}))
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc],'sender':localAddress}))
         elif f_hash < localHash and f_hash > preHash:
-            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre]}))
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre],'sender':localAddress}))
         elif f_hash > sucHash:
             await tcp_client(suc,json.dumps(data))
         elif f_hash < preHash:
             await tcp_client(pre,json.dumps(data))
         return
     elif isBiggest:
-        await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc]}))
+        if f_hash < preHash:
+            await tcp_client(pre,json.dumps(data))
+        elif f_hash > preHash and f_hash < localHash:
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre],'sender':localAddress}))
+        elif f_hash > localHash:
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc],'sender':localAddress}))
         return
     elif isSmallest:
-        await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre]}))
+        if f_hash > sucHash:
+            await tcp_client(suc,json.dumps(data))
+        elif f_hash < sucHash and f_hash > localHash:
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc],'sender':localAddress}))
+        elif f_hash < localHash:
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre],'sender':localAddress}))
         return
         
 
@@ -479,7 +489,7 @@ async def clientMetricCollector():
         # _sRT = serverResponseTime
         _pRT = peersResponseTime
         _rFF = requestForFilesCounter
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
 
 #TODO: finish it
 async def main():
@@ -501,11 +511,11 @@ async def main():
         print('try to join using node:{}:{}'.format(serverAddr,serverPort))
         await tcp_client('{}:{}'.format(serverAddr,serverPort),json.dumps({'cmd':'join','port':port}))
     while pre == None or suc == None:
-        print('waiting peers...')
+        # print('waiting peers...')
         isFirstNode = True
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.01)
     checkSmallestOrBiggest()
-    # print('finish join')
+    print('finish join')
     #step2 file syncing
     # print(localAddress)
     loop = asyncio.get_event_loop()
@@ -602,6 +612,7 @@ async def peerHandler(reader,writer):
         await searchHandler(data)
         return
     if cmd == 'result':
+        # print(data)
         await downloadFiles(data)
         return
 
