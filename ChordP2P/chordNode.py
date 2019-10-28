@@ -63,6 +63,9 @@ def scanFiles(directory):
     return fList
 
 async def fileReader(filename,myChunkNumber,totalChunkNumber):
+    global localAddress
+    global pre
+    global suc
     # print('FILENAME:',filename)
     try:
         fileSize = os.stat(filename).st_size
@@ -76,6 +79,11 @@ async def fileReader(filename,myChunkNumber,totalChunkNumber):
         return chunk
     except FileNotFoundError:
         print('ERROR with read file:',filename,' chunkNumber:',myChunkNumber,' total:',totalChunkNumber)
+        print('local:',localAddress,' suc:',suc,' pre:',pre)
+        print('fileHash:',getHashPos(filename))
+        print('localHash:',getHashPos(localAddress))
+        print('preHash:',getHashPos(pre))
+        print('sucHash:',getHashPos(suc))
         return b''
     
 
@@ -210,7 +218,7 @@ async def fileSync():
     localHash = getHashPos(localAddress)
     sucHash = getHashPos(suc)
 
-
+    # print('SHARING')
     filesIHave = scanFiles(sharingDir)
     for f in filesIHave:
         f_hash = getHashPos(f)
@@ -507,6 +515,7 @@ async def main():
         await LS(fileList)
 
     await tcp_client(suc,json.dumps({'cmd':'NEEDSYNC','sourcePeer':localAddress}))
+    await fileSync()
     # print('syncing')
     #ready for sharing
     
@@ -518,7 +527,7 @@ async def main():
             tasks.append(tcp_client(suc,json.dumps({'cmd':'search','sourcePeer':localAddress,'file':_file_})))
         all_task = asyncio.wait(tasks)
         await loop.create_task(all_task)
-        print('search finished')
+        # print('search finished')
         if f - (loop.time()-t_loopstart) > 0:
             await asyncio.sleep(f - (loop.time()-t_loopstart))
 
@@ -568,6 +577,7 @@ async def peerHandler(reader,writer):
         await fileSyncHandler(peer,data['file'],addr[0] + ':' + str(data['port']))
         return
     if cmd == 'NEEDSYNC':
+        
         peer = ''
         if 'sourcePeer' in data.keys():
             peer = data['sourcePeer']
@@ -575,6 +585,7 @@ async def peerHandler(reader,writer):
             peer = addr[0] + ':' + str(data['port'])  # create peer address
         if not peer == localAddress:
             await tcp_client(suc,json.dumps(data))
+            # print('NEEDSYNC')
             await fileSync()
         return
     if cmd == 'LS':
