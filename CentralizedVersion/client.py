@@ -346,7 +346,7 @@ async def main():
             tasks.append(fileWriter(os.path.join(downloadingDir,filesToFetch[i]), files[i]))
             # writerWorkers.append(Worker(target=fileWriter, args=(os.path.join(downloadingDir,filesToFetch[i]), files[i])))
         # await loop.create_task(asyncio.wait(writerWorkers))
-        all_task = async.wait(tasks)
+        all_task = asyncio.wait(tasks)
         await loop.create_task(all_task)
         print('written')
         if f - (loop.time()-t_loopstart) > 0:
