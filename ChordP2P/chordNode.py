@@ -321,8 +321,50 @@ async def fileSyncHandler(peerAddress,fileName,msgFrom):
             return
 
 #TODO: search file
-async def search(filehash):
-    pass
+async def searchHandler(data):
+    global localAddress
+    global pre
+    global suc
+    global fileList
+    global isBiggest
+
+    preHash = getHashPos(pre)
+    localHash = getHashPos(localAddress)
+    sucHash = getHashPos(suc)
+    source = data['sourcePeer']
+    f = data['file']
+    f_hash = getHashPos(f)
+    
+    if not isBiggest and not isSmallest:
+        if f_hash < sucHash and f_hash > localHash:
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc]}))
+        elif f_hash < localHash and f_hash > preHash:
+            await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre]}))
+        elif f_hash > sucHash:
+            await tcp_client(suc,json.dumps(data))
+        elif f_hash < preHash:
+            await tcp_client(pre,json.dumps(data))
+        return
+    elif isBiggest:
+        await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,suc]}))
+        return
+    elif isSmallest:
+        await tcp_client(source,json.dumps({'cmd':'result','file':f,'owner':[localAddress,pre]}))
+        return
+        
+
+async def downloadFiles(data):
+    global downloadingDir
+
+    owner = data['owner']
+    fileName = data['file']
+    fileData = [b'',b'']
+    tasks = [RequestForFile(fileData,fileName,owner[0],0,2),RequestForFile(fileData,fileName,owner[1],1,2)]
+    all_task = asyncio.wait(tasks)
+    loop = asyncio.get_event_loop()
+    await loop.create_task(all_task)
+    fileData = fileData[0]+fileData[1]
+    await fileWriter(os.path.join(downloadingDir,fileName),fileData)
 
 # file transfer handler
 async def fileTransferHandler(data,writer):
@@ -454,21 +496,25 @@ async def main():
     checkSmallestOrBiggest()
     # print('finish join')
     #step2 file syncing
-    print(localAddress)
+    # print(localAddress)
     if isFirstNode:
         fileList = scanFiles(sharingDir) if len(fileList)==0 else fileList
         await LS(fileList)
     await tcp_client(suc,json.dumps({'cmd':'NEEDSYNC','sourcePeer':localAddress}))
-    print('syncing')
+    # print('syncing')
     #ready for sharing
-    last_suc = suc
-    last_pre = pre
+    loop = asyncio.get_event_loop()
     while True:
-        # if (not pre == last_pre) or (not suc == last_suc):
-        # print('suc: {}, pre: {}, localAddress: {}, local Hash:{}'.format(suc,pre,localAddress,getHashPos(localAddress)))
-            # last_suc = suc
-            # last_pre = pre
-        await asyncio.sleep(1)
+        t_loopstart = loop.time()
+        filesToDownload = random.sample(fileList,N)  # randomly choose N files to fetch from the p2p network
+        tasks = []
+        for _file_ in filesToDownload:
+            tasks.append(tcp_client(suc,json.dumps({'cmd':'search','sourcePeer':localAddress,'file':_file_})))
+        all_task = asyncio.wait(tasks)
+        await loop.create_task(all_task)
+        print('search finished')
+        if f - (loop.time()-t_loopstart) > 0:
+            await asyncio.sleep(f - (loop.time()-t_loopstart))
 
 
 # main server router
@@ -533,6 +579,13 @@ async def peerHandler(reader,writer):
         return
     if cmd == "get":
         await fileTransferHandler(data, writer)
+        return
+    if cmd == "search":
+        print('get search')
+        await searchHandler(data)
+        return
+    if cmd == 'result':
+        await downloadFiles(data)
         return
     # if cmd == "unreg":
     #     await unregHandler(peer, writer)
